@@ -44,6 +44,111 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
+   
+   //create db and collections
+
+   const db = await client.db("e-commerce-dashboard")
+
+
+   //creating indexes for fasrer query
+   await db.collection("orders").createIndex({orderDate:-1})
+   await db.collection("orders").createIndex({userId:1})
+   await db.collection("products").createIndex({stock:1})
+   await db.collection("users").createIndex({lastLogin:-1})
+   await db.collection("users").createIndex({email:1},{unique:true})
+   await db.collection("products").createIndex({category:1})
+   
+   //data insert
+
+  // await db.collection("orders").insertOne({
+  //  name:"Product 1"
+  // })
+   
+   //dashboard analytics endpoint
+
+   app.get("/api/dashboard/analytics", async(req,res) => {
+  
+
+// try chk korba cache kora acha kina??
+
+try{
+const cacheAnalytics = cache.get("dashboardAnalytics");
+if(cacheAnalytics){
+  return res.json(cacheAnalytics)
+}
+//document count
+// Promise.all dia db ka handle kortacha 
+const [activeUsers,totaProducts,totalRevenueData] = await Promise.all([
+  db.collection("users").countDocuments(),
+  db.collection("products").countDocuments(),
+
+  db.collection("orders").aggregate([
+    {
+      $group:
+        
+        {
+          _id: null,
+          totalRevenue: {
+            $sum: "$totalAmount"
+          },
+          totalOrders: {
+            $sum: 1
+          }
+        }
+    }
+  ]).toArray()
+
+
+
+])
+//activeUser kivaba response a send korbo???
+const analyticsData = {
+  activeUsers,totaProducts,totalRevenueData
+}
+
+cache.set("dashboardAnalytics",analyticsData,600)
+//cache er name holo dashboardAnalytics.      analyticsData ka cache korichi. eta bar bar db fetch korba na. 600=10 min cache korbo
+
+res.json(analyticsData)
+// res.json er madhoma data send korbo
+
+}
+catch(error){
+  console.error(error)
+  res.status(500).json({
+    message:"Internal Server Error",
+    error:error.message
+  })
+}
+
+
+
+
+   })
+
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
