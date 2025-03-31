@@ -74,14 +74,19 @@ async function run() {
 try{
 const cacheAnalytics = cache.get("dashboardAnalytics");
 if(cacheAnalytics){
+ // console.log("Loading from cache")
   return res.json(cacheAnalytics)
 }
 //document count
 // Promise.all dia db ka handle kortacha 
 const [activeUsers,totaProducts,totalRevenueData] = await Promise.all([
+  //active users
   db.collection("users").countDocuments(),
+
+  //total products
   db.collection("products").countDocuments(),
 
+  //total revenue
   db.collection("orders").aggregate([
     {
       $group:
@@ -96,7 +101,10 @@ const [activeUsers,totaProducts,totalRevenueData] = await Promise.all([
           }
         }
     }
-  ]).toArray()
+  ]).toArray(),
+
+  //monthly sales data
+  
 
 
 
