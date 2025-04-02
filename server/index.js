@@ -79,7 +79,7 @@ if(cacheAnalytics){
 }
 //document count
 // Promise.all dia db ka handle kortacha 
-const [activeUsers,totaProducts,totalRevenueData] = await Promise.all([
+const [activeUsers,totaProducts,totalRevenueData,monthlySalesData,inventoryMetrics] = await Promise.all([
   //active users
   db.collection("users").countDocuments(),
 
@@ -104,14 +104,93 @@ const [activeUsers,totaProducts,totalRevenueData] = await Promise.all([
   ]).toArray(),
 
   //monthly sales data
-  
+  db.collection("orders").aggregate( [
+    {
+      $group:    
+        {
+          _id: {
+            year: {
+              $year: "$orderDate"
+            },
+            month: {
+              $month: "$orderDate"
+            }
+          },
+          revenue: {
+            $sum: "$totalAmount"
+          },
+          orders: {
+            $sum: 1
+          }
+        }
+    },
+    {
+      $project:
+      
+        {
+          _id: 0,
+          year: "$_id.year",
+          month: "$_id.month",
+          revenue: 1,
+          orders: 1
+        }
+    },
+    {
+      $sort:
+      
+        {
+          year: 1,
+          month: 1
+        }
+    }
+  ]).toArray(),
 
+
+  //inventory matrics
+  db.collection("products").aggregate([
+    {
+      $group:
+         
+        {
+          _id: null,
+          totalStock: {
+            $sum: "$stock"
+          },
+          averageStock: {
+            $avg: "$stock"
+          },
+          lowStock: {
+            $sum: {
+              $cond: [
+                {
+                  $lt: ["$stock", 10]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          outOfStock: {
+            $sum: {
+              $cond: [
+                {
+                  $eq: ["$stock", 0]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+    }
+  ]).toArray(),
+// Customer Analysis
 
 
 ])
 //activeUser kivaba response a send korbo???
 const analyticsData = {
-  activeUsers,totaProducts,totalRevenueData
+  activeUsers,totaProducts,totalRevenueData,monthlySalesData,inventoryMetrics
 }
 
 cache.set("dashboardAnalytics",analyticsData,600)
