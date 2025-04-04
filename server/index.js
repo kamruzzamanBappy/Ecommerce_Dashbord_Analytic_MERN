@@ -13,17 +13,12 @@ const cache = new NodeCache({stdTTL:100});
 app.use(express.json())
 app.use(compression())
 app.use(express.urlencoded({extended:true}))
-app.use(cors({
-  origin:process.env.FRONTEND_URL || "http://localhost:5173/",
-  methods:["GET","POST","PUT","DELETE","OPTIONS"],
+ app.use(cors({
+ origin:process.env.FRONTEND_URL || "http://localhost:5173/",
+   methods:["GET","POST","PUT","DELETE","OPTIONS"],
   credentials:true,
-  allowedHeaders:["Content-Type","Authorization"]
-}))
-
-
-
-
-
+   allowedHeaders:["Content-Type","Authorization"]
+ }))
 
 
 
@@ -79,7 +74,7 @@ if(cacheAnalytics){
 }
 //document count
 // Promise.all dia db ka handle kortacha 
-const [activeUsers,totaProducts,totalRevenueData,monthlySalesData,inventoryMetrics] = await Promise.all([
+const [activeUsers,totaProducts,totalRevenueData,monthlySalesData,inventoryMetrics,customerSegmentation] = await Promise.all([
   //active users
   db.collection("users").countDocuments(),
 
@@ -185,13 +180,55 @@ const [activeUsers,totaProducts,totalRevenueData,monthlySalesData,inventoryMetri
     }
   ]).toArray(),
 // Customer Analysis
+db.collection("orders").aggregate([
+ {
+   segment:{
+     $switch:{
+       branches:[
+           {
+           case: {
+            $and:[ 
+               {$gte:["$totalSpent",10000
+           ]},
+               {$lt:["$daysSinceLastPurchase",7
+           ]}
+            ]
+         }, then:"VIP"},
+           {
+           case: {
+             $lt:["$daysSinceLastPurchase",7
+           ]
+         }, then:"Active"},
+         {
+           case: {
+             $lt:["daysSinceLastPurchase",30
+           ]
+         },
+           then:"Regular" }
+       ],
+       default:"At Risk"
+     }
+   }
+ }]).toArray(),
 
+]);
 
-])
+const totalOrders = totalRevenueData[0].totalOrders || 0
+const totalRevenue = totalRevenueData[0].totalRevenue || 0
 //activeUser kivaba response a send korbo???
 const analyticsData = {
-  activeUsers,totaProducts,totalRevenueData,monthlySalesData,inventoryMetrics
+  activeUsers,totaProducts,totalRevenueData,monthlySalesData,inventoryMetrics:inventoryMetrics[0],customerAnalytics:{
+    totalCustomers:customerSegmentation.length,
+    averageLifetimeValue:customerSegmentation((acc,curr)=>acc + curr.totalSpent, 0)/customerSegmentation.length || 0,
+  customElements:customerSegmentation
+  },
+kpis:{
+  averageOrderValue:totalOrders > 0 ? totalRevenue / totalOrders:0,
+  conversionRate:activeUsers > 0 > 0? ((totalOrders/activeUsers) * 100).toFixed(2): "0.00",
+  stockTurnoverRate:inventoryMetrics[0]?.totalStock>0 ? totalRevenue/inventoryMetrics[0].totalStock:0
 }
+
+};
 
 cache.set("dashboardAnalytics",analyticsData,600)
 //cache er name holo dashboardAnalytics.      analyticsData ka cache korichi. eta bar bar db fetch korba na. 600=10 min cache korbo
